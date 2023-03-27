@@ -6,6 +6,7 @@
 //
 
 import UIKit
+import Combine
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
@@ -16,7 +17,16 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // Use this method to optionally configure and attach the UIWindow `window` to the provided UIWindowScene `scene`.
         // If using a storyboard, the `window` property will automatically be initialized and attached to the scene.
         // This delegate does not imply the connecting scene or session are new (see `application:configurationForConnectingSceneSession` instead).
-        guard let _ = (scene as? UIWindowScene) else { return }
+        guard let windowScene = (scene as? UIWindowScene) else { return }
+        
+        let window = UIWindow(windowScene: windowScene)
+
+        window.rootViewController = makeViewController()
+        self.window = window
+        window.makeKeyAndVisible()
+        
+        UINavigationBar.appearance().barTintColor = .clear
+        UINavigationBar.appearance().setBackgroundImage(UIImage(), for: .default)
     }
 
     func sceneDidDisconnect(_ scene: UIScene) {
@@ -50,6 +60,49 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         (UIApplication.shared.delegate as? AppDelegate)?.saveContext()
     }
 
+    fileprivate func makeViewController() -> UIViewController {
+        ArticleList.makeView(
+            store: .init(
+                initialState:
+                    ArticleList.State(
+                        listItems: [] // Pull from  persistance?
+                    ),
+                reducer:
+                    ArticleList(
+                        fetchArticles: {
+                            await self.getMockArticles()
+                        },
+                        fetchStoredArticles: {
+                            await self.getStoredArticles()
+                        }
+                    )
+            )
+        )
+    }
+    
 
+    fileprivate func getMockArticles() async -> [any ArticlePresentible] {
+        let lol = URL(string: "https://run.mocky.io/v3/de42e6d9-2d03-40e2-a426-8953c7c94fb8")!
+        do {
+            let result = try await APIClient().fetchData(from: lol)
+            return result
+        } catch {
+            print(error)
+            return []
+        }
+    }
+    
+    fileprivate func getStoredArticles() async -> [Article] {
+        let appDelegate = UIApplication.shared.delegate as! AppDelegate
+        let mainContext = appDelegate.persistentContainer.viewContext
+        
+        do {
+            return try await CoreDataHelper.shared.fetch(Article.self) ?? []
+        } catch {
+            print(error)
+            return []
+        }
+    }
+    
 }
 
